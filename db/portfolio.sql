@@ -12,5 +12,15 @@ CREATE TABLE event(
     cur_rate DECIMAL(10,5),
     profit DECIMAL(10,2),
     PRIMARY KEY (event_id)
+    UNIQUE KEY (event_id, source)
 ) ENGINE=InnoDB;
---    UNIQUE KEY (event_id, source)
+
+CREATE TABLE quote(
+    instrument VARCHAR(32),
+    date DATETIME,
+    open DECIMAL(10,5),
+    high DECIMAL(10,5),
+    low DECIMAL(10,5),
+    close DECIMAL(10,5),
+    volume INT
+)

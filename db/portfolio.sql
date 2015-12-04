@@ -16,11 +16,18 @@ CREATE TABLE event(
 ) ENGINE=InnoDB;
 
 CREATE TABLE quote(
-    instrument VARCHAR(32),
-    date DATETIME,
+    instrument VARCHAR(32) NOT NULL,
+    date DATE NOT NULL,
     open DECIMAL(10,5),
     high DECIMAL(10,5),
     low DECIMAL(10,5),
-    close DECIMAL(10,5),
-    volume INT
-)
+    close DECIMAL(10,5) NOT NULL,
+    volume INT,
+    currency CHAR(3) NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE currency_rate(
+    currency CHAR(3),
+    date DATE,
+    average DECIMAL(10,5)
+) ENGINE=InnoDB;

@@ -4,7 +4,7 @@ import javax.sql.DataSource
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import scalikejdbc._
-import org.joda.time.DateTime
+import org.joda.time.{LocalDate, DateTime}
 
 case class Event(eventId: Int, extId: Int, source: String, tradeDate: DateTime, eventType: String,
                  instrument: String, quantity: Int, amount: Double, price: Option[Double], currency: String, curRate: Double, profit: Double)
@@ -23,6 +23,37 @@ object Event {
     rs.string("currency"),
     rs.double("cur_rate"),
     rs.double("profit"))
+}
+
+case class Quote(instrument: String, date: LocalDate, open: Option[Double], high: Option[Double],
+                 low: Option[Double], close: Double, volume: Option[Int], currency: String, fxRate: Option[Double]) {
+
+  val baseCurrencyClose = close/fxRate.getOrElse(1.0);
+
+}
+
+object Quote {
+  def apply(rs: WrappedResultSet) = new Quote(
+    rs.string("instrument"),
+    new LocalDate(rs.date("date")),
+    rs.doubleOpt("open"),
+    rs.doubleOpt("high"),
+    rs.doubleOpt("low"),
+    rs.double("close"),
+    rs.intOpt("volume"),
+    rs.string("currency"),
+    rs.doubleOpt("fx_rate")
+  )
+}
+
+case class FxRate(date: LocalDate, currency: String, average: Double)
+
+object FxRate {
+  def apply(rs: WrappedResultSet) = new FxRate(
+    new LocalDate(rs.date("date")),
+    rs.string("currency"),
+    rs.double("average")
+  )
 }
 
 class Database {
@@ -63,16 +94,49 @@ class Database {
           WHERE event_type IN ('OSTO', 'MYYNTI', 'OSINKO')
           AND trade_date <= ${until}
           ORDER BY trade_date"""
-      .map(rs => Event(rs))
-      .list
-      .apply()
+      .map(rs => Event(rs)).list.apply
   }
   def saveQuotes(quotes: List[Quote]) = DB autoCommit  { implicit session =>
-    quotes.foreach(q => {
-      println(q)
+    quotes.foreach(q =>
       sql"""INSERT INTO quote (instrument, date, open, high, low, close, volume)
-          VALUES (${q.instrument}, ${q.date}, ${q.open}, ${q.high}, ${q.low}, ${q.close}, ${q.volume})""".execute().apply()
-    }
+            VALUES (${q.instrument}, ${q.date}, ${q.open}, ${q.high}, ${q.low}, ${q.close}, ${q.volume})""".execute().apply
+    )}
+
+  def getQuotes(instrument: String, from: LocalDate, to: LocalDate) = DB readOnly { implicit session =>
+    val b =
+    sql"""SELECT q.instrument, q.date, q.open, q.high, q.low, q.close, q.volume, q.currency, fx.average as fx_rate
+          FROM quote q
+          LEFT JOIN fx_rate fx ON (fx.date = q.date AND fx.currency = q.currency)
+          WHERE q.date >= ${from}
+          AND q.date <= ${to}
+          AND q.instrument = ${instrument}
+          ORDER BY q.date""".map(rs => Quote(rs)).list.apply
+
+    println(b.headOption)
+    b
+  }
+
+  def getQuotes2(instruments: Seq[String], from: LocalDate, to: LocalDate) = DB readOnly { implicit session =>
+    sql"""SELECT instrument, date, open, high, low, close, volume, currency
+          FROM quote
+          WHERE date >= ${from}
+          AND date <= ${to}
+          AND instrument IN (${instruments})"""
+    .map(rs => Quote(rs)).list.apply
+  }
+
+  def saveFxRates(fxRates: Seq[FxRate]) = DB autoCommit { implicit session =>
+    fxRates.foreach(fx =>
+      sql"""INSERT INTO fx_rate (currency, date, average) VALUES(${fx.currency}, ${fx.date}, ${fx.average})""".execute().apply
     )
+  }
+
+  def getFxRates(currency: String, from: LocalDate, to: LocalDate) = DB readOnly { implicit session =>
+    sql"""SELECT date, currency, average
+          FROM fx_rate
+          WHERE currency = $currency
+          AND date >= ${from}
+          AND date <= ${to}
+       """.map(rs => FxRate(rs)).list.apply
   }
 }

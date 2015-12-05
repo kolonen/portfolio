@@ -25,8 +25,8 @@ object Event {
     rs.double("profit"))
 }
 
-case class Quote(instrument: String, date: LocalDate, open: Option[Double], high: Option[Double],
-                 low: Option[Double], close: Double, volume: Option[Int], currency: String, fxRate: Option[Double]) {
+case class Quote(instrument: String, date: LocalDate, open: Option[Double] = None, high: Option[Double] = None,
+                 low: Option[Double] = None, close: Double, volume: Option[Int] = None, currency: String, fxRate: Option[Double] = None) {
 
   val baseCurrencyClose = close/fxRate.getOrElse(1.0);
 
@@ -132,11 +132,12 @@ class Database {
   }
 
   def getFxRates(currency: String, from: LocalDate, to: LocalDate) = DB readOnly { implicit session =>
-    sql"""SELECT date, currency, average
+      sql"""SELECT date, currency, average
           FROM fx_rate
           WHERE currency = $currency
           AND date >= ${from}
           AND date <= ${to}
        """.map(rs => FxRate(rs)).list.apply
+
   }
 }

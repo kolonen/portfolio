@@ -10,5 +10,6 @@ libraryDependencies ++= Seq(
   "org.scalikejdbc" %% "scalikejdbc"  % "2.2.9",
   "ch.qos.logback"  %  "logback-classic"   % "1.1.3",
   "joda-time" % "joda-time" % "2.9",
-  "org.apache.commons" % "commons-csv" % "1.2"
+  "org.apache.commons" % "commons-csv" % "1.2",
+  "org.scalatest" % "scalatest_2.11" % "2.2.4" % "test"
 )

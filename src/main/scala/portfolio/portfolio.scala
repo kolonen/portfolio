@@ -13,7 +13,7 @@ case class Balance(investment: Double, cash: Double)
 object Portfolio {
 
   val db = new Database
-
+  val BaseCurrency = "EUR"
   /*
    * Returns a sparse series of different portfolios (contents) from date one to given date.
    */
@@ -72,7 +72,8 @@ object Portfolio {
     db.getCashFlowEvents(date).foldLeft[Double](0.0)((cash, event) => Math.max(0, cash + event.amount))
 
 
-  /* Calculates total investment tied to portfolio on given date. Tied investment is buys - sells - dividends.
+  /**
+   * Calculates total investment tied to portfolio on given date. Tied investment is buys - sells - dividends.
    * Calculation is done event by event, even though intermediate values are not used at this point.
    */
   def getInvestment(date: DateTime) = {
@@ -85,41 +86,46 @@ object Portfolio {
   }
 
   def getPortfolioValueSeries(date: DateTime) = {
-    val ps1 = getPortfolioSeries(date)
-    println(ps1.last)
-    val ps = toDenseSeries(ps1, date)
-    val l = ps.last
-    println(l)
+    val ps = toDenseSeries(getPortfolioSeries(date), date)
     val days = generateDateRange(ps.head.date, ps.last.date)
     val instruments = ps.flatMap(p => p.holdings.map(h => h._2.instrument)).distinct
-    val quotes = {
-      val q = for(i <- instruments) yield (prepareQuotes(db.getQuotes(i, days.head.toLocalDate, days.last.toLocalDate)))
-      q.reduceLeft(_++_)
-    }
+    val quotes =
+      {
+        for(i <- instruments) yield {
+          val q = db.getQuotes(i, days.head.toLocalDate, days.last.toLocalDate)
+          val fxRates = if(!q.head.currency.equals(BaseCurrency)) Some(db.getFxRates(q.head.currency, q.head.date, q.last.date)) else None
+          prepareQuotes(db.getQuotes(i, days.head.toLocalDate, days.last.toLocalDate), fxRates)
+        }
+      }.reduceLeft(_++_)
+
     val pm = ps.map(p => (p.date.toLocalDate, p)).toMap
     days.map(d => (d.toLocalDate, getPortfolioValue(pm(d.toLocalDate), quotes)))
   }
 
   def getPortfolioValue(p: Portfolio, quotes: Map[(LocalDate, String), Double]) = {
-    println(p.holdings + ": "+p.holdings.map(h => quotes((p.date.toLocalDate, h._2.instrument)) * h._2.quantity).sum)
+    println(p.date +" "+p.holdings.map(h => quotes((p.date.toLocalDate, h._2.instrument)) * h._2.quantity).sum)
     p.holdings.map(h => quotes((p.date.toLocalDate, h._2.instrument)) * h._2.quantity).sum
   }
 
   /**
-   * Fills the gaps from weekends and bank holidays in quote list and puts them to a map
+   * Adds missing quotes between quotes.first.date and quotes.last.date so that every day has a quote. If
+   * a quote is missing, previous value is used.
    *
-   * @param quotes
+   * Converts values to base currency if not originally.
+   *
+   *
+   * @param quotes ordered list of quotes per day
+   * @param fxRates ordered list of fx rates per day. for the same time line as quotes.
+   * @return a map with date, instrument pair as key and days (closing) quote as value
    */
-  def prepareQuotes(quotes: List[Quote]) = {
+  def prepareQuotes(quotes: List[Quote], fxRates: Option[List[FxRate]]) = {
+    val m =
+      if(fxRates.isDefined) quotes.zip(fxRates.get).map(i => ((i._1.date, i._1.instrument), i._1.close/i._2.average)).toMap
+      else quotes.map(q => ((q.date, q.instrument), q.close)).toMap
+
     val instrument = quotes.head.instrument
-    val m = quotes.map(q => ((q.date, q.instrument), q.baseCurrencyClose)).toMap
     val resultMap = scala.collection.mutable.Map[(LocalDate, String), Double]()
-    val h = quotes.head
-    val l = quotes.last
-    println(l+ " "+h)
     val days = generateDateRange(quotes.head.date.toDateTimeAtStartOfDay, quotes.last.date.toDateTimeAtStartOfDay)
-    val d1 = days.last
-    println(d1)
     var prevQuote = quotes.head.close
     days.foreach(d => {
       val q = m.get((d.toLocalDate, instrument))
@@ -129,8 +135,20 @@ object Portfolio {
       }
       else resultMap.put((d.toLocalDate, instrument), prevQuote)
     })
-    println(resultMap.get((days.last.toLocalDate, instrument)))
     resultMap.toMap
+  }
+
+  def prepareFxRates(rates: List[FxRate]) = {
+    val currency = rates.head.currency
+    val rateMap = rates.map(r => (r.date, r.average)).toMap
+    val days = generateDateRange(rates.head.date.toDateTimeAtStartOfDay, rates.last.date.toDateTimeAtStartOfDay)
+    days.foldLeft[(List[FxRate], Double)] ((List(), rates.head.average)) ((acc, x) => {
+      val rate = rateMap.get(x.toLocalDate)
+      if(rate.isDefined)
+        (acc._1:+FxRate(x.toLocalDate, currency, rate.get), rate.get)
+      else
+        (acc._1:+FxRate(x.toLocalDate, currency, acc._2), acc._2)
+    })._1
   }
 
   def generateDateRange(from: DateTime, to: DateTime) =

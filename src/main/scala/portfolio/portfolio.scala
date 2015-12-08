@@ -14,7 +14,36 @@ object Portfolio {
 
   val db = new Database
   val BaseCurrency = "EUR"
-  /*
+
+  /**
+   *
+   * @param date
+   * @return
+   */
+  def getPortfolioValueSeries(date: DateTime) = {
+    val ps = toDenseSeries(getPortfolioSeries(date), date)
+    val days = generateDateRange(ps.head.date, ps.last.date)
+    val instruments = ps.flatMap(p => p.holdings.map(h => h._2.instrument)).distinct
+    val quotes =
+      {
+        for(i <- instruments) yield {
+          val q = db.getQuotes(i, days.head.toLocalDate, days.last.toLocalDate)
+          val fxRates =
+            if(!q.head.currency.equals(BaseCurrency))
+              Some(fillFxRates(db.getFxRates(q.head.currency, q.head.date, q.last.date)))
+            else None
+          prepareQuotes(db.getQuotes(i, days.head.toLocalDate, days.last.toLocalDate), fxRates)
+        }
+      }.reduceLeft(_++_)
+
+    val pm = ps.map(p => (p.date.toLocalDate, p)).toMap
+    days.map(d => (d.toLocalDate, getPortfolioValue(pm(d.toLocalDate), quotes)))
+
+    def getPortfolioValue(p: Portfolio, quotes: Map[(LocalDate, String), Double]) =
+      p.holdings.map(h => quotes((p.date.toLocalDate, h._2.instrument)) * h._2.quantity).sum
+  }
+
+  /**
    * Returns a sparse series of different portfolios (contents) from date one to given date.
    */
   def getPortfolioSeries(date: DateTime) = {
@@ -34,44 +63,6 @@ object Portfolio {
     trades.tail.scanLeft(dayOnePortfolio) ((acc, e) => trade(acc,e))
   }
 
-  def toDenseSeries(ps: List[Portfolio], to: DateTime) = {
-    val from = ps.head.date
-    val days = generateDateRange(from, to)
-    var current = ps.head
-    var rest = ps.tail
-    days.map(d => {
-      if(rest.isEmpty || rest.head.date.isAfter(d)) current.copy(date = d)
-      else {
-        current = rest.head
-        rest = rest.tail
-        current.copy(date = d)
-      }
-    })
-  }
-
-  /* Returns portfolio contents at given date
-   */
-  def getPortfolio(date: DateTime) = {
-
-    def trade(holdings: Map[String, Asset], t: Event) =
-      if (!holdings.contains(t.instrument) ) holdings + ((t.instrument, Asset(t.instrument, t.quantity, None)))
-      else if (t.eventType.equals("MYYNTI")) {
-        val remaining = holdings(t.instrument).quantity - t.quantity
-        if(remaining > 0) holdings + ((t.instrument, Asset(t.instrument, remaining, None)))
-        else holdings - t.instrument
-      }
-      else holdings + ((t.instrument, Asset(t.instrument, holdings(t.instrument).quantity + t.quantity, None)))
-
-    Portfolio(db.getTrades(date).foldLeft[Map[String, Asset]](Map[String, Asset]())((acc, e) => trade(acc,e)), date)
-  }
-
-  /* Returns current cash in the portfolio, representing the amount of
-   * money got from closed positions that is not spent to open positions afterwards.
-   */
-  def getCash(date: DateTime) =
-    db.getCashFlowEvents(date).foldLeft[Double](0.0)((cash, event) => Math.max(0, cash + event.amount))
-
-
   /**
    * Calculates total investment tied to portfolio on given date. Tied investment is buys - sells - dividends.
    * Calculation is done event by event, even though intermediate values are not used at this point.
@@ -85,34 +76,17 @@ object Portfolio {
     db.getCashFlowEvents(date).foldLeft[Balance](Balance(0.0, 0.0)) ((balance, event) => calculate(balance, event))
   }
 
-  def getPortfolioValueSeries(date: DateTime) = {
-    val ps = toDenseSeries(getPortfolioSeries(date), date)
-    val days = generateDateRange(ps.head.date, ps.last.date)
-    val instruments = ps.flatMap(p => p.holdings.map(h => h._2.instrument)).distinct
-    val quotes =
-      {
-        for(i <- instruments) yield {
-          val q = db.getQuotes(i, days.head.toLocalDate, days.last.toLocalDate)
-          val fxRates = if(!q.head.currency.equals(BaseCurrency)) Some(db.getFxRates(q.head.currency, q.head.date, q.last.date)) else None
-          prepareQuotes(db.getQuotes(i, days.head.toLocalDate, days.last.toLocalDate), fxRates)
-        }
-      }.reduceLeft(_++_)
-
-    val pm = ps.map(p => (p.date.toLocalDate, p)).toMap
-    days.map(d => (d.toLocalDate, getPortfolioValue(pm(d.toLocalDate), quotes)))
-  }
-
-  def getPortfolioValue(p: Portfolio, quotes: Map[(LocalDate, String), Double]) = {
-    println(p.date +" "+p.holdings.map(h => quotes((p.date.toLocalDate, h._2.instrument)) * h._2.quantity).sum)
-    p.holdings.map(h => quotes((p.date.toLocalDate, h._2.instrument)) * h._2.quantity).sum
-  }
+  /**
+   * Returns current cash in the portfolio, representing the amount of
+   * money got from closed positions that is not spent to open positions afterwards.
+   */
+  def getCash(date: DateTime) =
+    db.getCashFlowEvents(date).foldLeft[Double](0.0)((cash, event) => Math.max(0, cash + event.amount))
 
   /**
-   * Adds missing quotes between quotes.first.date and quotes.last.date so that every day has a quote. If
-   * a quote is missing, previous value is used.
+   * Adds missing quotes for dates between quotes.first.date and quotes.last.date. If a quote is missing, previous value is used.
    *
    * Converts values to base currency if not originally.
-   *
    *
    * @param quotes ordered list of quotes per day
    * @param fxRates ordered list of fx rates per day. for the same time line as quotes.
@@ -138,7 +112,14 @@ object Portfolio {
     resultMap.toMap
   }
 
-  def prepareFxRates(rates: List[FxRate]) = {
+  /**
+   * Adds rates for days which are not present between first and last element in the list. Previous rate is
+   * used for missing days.
+   *
+   * @param rates a list of rates ordered by date
+   * @return an ordered list rates which contains rates for all days
+   */
+  def fillFxRates(rates: List[FxRate]) = {
     val currency = rates.head.currency
     val rateMap = rates.map(r => (r.date, r.average)).toMap
     val days = generateDateRange(rates.head.date.toDateTimeAtStartOfDay, rates.last.date.toDateTimeAtStartOfDay)
@@ -151,6 +132,22 @@ object Portfolio {
     })._1
   }
 
+  def toDenseSeries(ps: List[Portfolio], to: DateTime) = {
+    val from = ps.head.date
+    val days = generateDateRange(from, to)
+    var current = ps.head
+    var rest = ps.tail
+    days.map(d => {
+      if(rest.isEmpty || rest.head.date.isAfter(d)) current.copy(date = d)
+      else {
+        current = rest.head
+        rest = rest.tail
+        current.copy(date = d)
+      }
+    })
+  }
+
   def generateDateRange(from: DateTime, to: DateTime) =
     for(d <- List.range(0, Days.daysBetween(from, to).getDays+1)) yield (from.plusDays(d))
+
 }

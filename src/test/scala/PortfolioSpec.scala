@@ -52,7 +52,7 @@ class PortfolioSpec extends FunSpec with Matchers{
         FxRate(new LocalDate("2014-01-06"), "SEK", 9.101),
         FxRate(new LocalDate("2014-01-07"), "SEK", 9.00))
 
-      Portfolio.prepareFxRates(rates) should contain theSameElementsInOrderAs(expexted)
+      Portfolio.fillFxRates(rates) should contain theSameElementsInOrderAs(expexted)
     }
   }
 }

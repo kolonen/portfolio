@@ -4,7 +4,6 @@ import org.joda.time.{LocalDate, Days, DateTime}
 
 case class Asset(instrument: String, quantity: Int, assetType: Option[String])
 case class Portfolio(holdings: Map[String, Asset], date: DateTime)
-
 case class Balance(investment: Double, cash: Double)
 
 /**
@@ -21,6 +20,10 @@ object Portfolio {
    * @return
    */
   def getPortfolioValueSeries(date: DateTime) = {
+
+    def getPortfolioValue(p: Portfolio, quotes: Map[(LocalDate, String), Double]) =
+      p.holdings.map(h => quotes((p.date.toLocalDate, h._2.instrument)) * h._2.quantity).sum
+
     val ps = toDenseSeries(getPortfolioSeries(date), date)
     val days = generateDateRange(ps.head.date, ps.last.date)
     val instruments = ps.flatMap(p => p.holdings.map(h => h._2.instrument)).distinct
@@ -30,17 +33,15 @@ object Portfolio {
           val q = db.getQuotes(i, days.head.toLocalDate, days.last.toLocalDate)
           val fxRates =
             if(!q.head.currency.equals(BaseCurrency))
-              Some(fillFxRates(db.getFxRates(q.head.currency, q.head.date, q.last.date)))
+              Some(fillFxRates(db.getFxRates(q.head.currency, q.head.date, q.last.date), Some(date)))
             else None
-          prepareQuotes(db.getQuotes(i, days.head.toLocalDate, days.last.toLocalDate), fxRates)
+          prepareQuotes(db.getQuotes(i, days.head.toLocalDate, days.last.toLocalDate), fxRates, Some(date))
         }
       }.reduceLeft(_++_)
 
     val pm = ps.map(p => (p.date.toLocalDate, p)).toMap
     days.map(d => (d.toLocalDate, getPortfolioValue(pm(d.toLocalDate), quotes)))
 
-    def getPortfolioValue(p: Portfolio, quotes: Map[(LocalDate, String), Double]) =
-      p.holdings.map(h => quotes((p.date.toLocalDate, h._2.instrument)) * h._2.quantity).sum
   }
 
   /**
@@ -92,14 +93,14 @@ object Portfolio {
    * @param fxRates ordered list of fx rates per day. for the same time line as quotes.
    * @return a map with date, instrument pair as key and days (closing) quote as value
    */
-  def prepareQuotes(quotes: List[Quote], fxRates: Option[List[FxRate]]) = {
+  def prepareQuotes(quotes: List[Quote], fxRates: Option[List[FxRate]], to: Option[DateTime] = None) = {
     val m =
       if(fxRates.isDefined) quotes.zip(fxRates.get).map(i => ((i._1.date, i._1.instrument), i._1.close/i._2.average)).toMap
       else quotes.map(q => ((q.date, q.instrument), q.close)).toMap
 
     val instrument = quotes.head.instrument
     val resultMap = scala.collection.mutable.Map[(LocalDate, String), Double]()
-    val days = generateDateRange(quotes.head.date.toDateTimeAtStartOfDay, quotes.last.date.toDateTimeAtStartOfDay)
+    val days = generateDateRange(quotes.head.date.toDateTimeAtStartOfDay, to.getOrElse(quotes.last.date.toDateTimeAtStartOfDay))
     var prevQuote = quotes.head.close
     days.foreach(d => {
       val q = m.get((d.toLocalDate, instrument))
@@ -119,10 +120,10 @@ object Portfolio {
    * @param rates a list of rates ordered by date
    * @return an ordered list rates which contains rates for all days
    */
-  def fillFxRates(rates: List[FxRate]) = {
+  def fillFxRates(rates: List[FxRate], to: Option[DateTime] = None) = {
     val currency = rates.head.currency
     val rateMap = rates.map(r => (r.date, r.average)).toMap
-    val days = generateDateRange(rates.head.date.toDateTimeAtStartOfDay, rates.last.date.toDateTimeAtStartOfDay)
+    val days = generateDateRange(rates.head.date.toDateTimeAtStartOfDay, to.getOrElse(rates.last.date.toDateTimeAtStartOfDay))
     days.foldLeft[(List[FxRate], Double)] ((List(), rates.head.average)) ((acc, x) => {
       val rate = rateMap.get(x.toLocalDate)
       if(rate.isDefined)

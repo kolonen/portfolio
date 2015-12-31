@@ -2,7 +2,7 @@ CREATE TABLE event(
     event_id INT NOT NULL AUTO_INCREMENT,
     ext_id INT,
     source VARCHAR(16),
-    trade_date DATETIME,
+    trade_date DATE,
     event_type VARCHAR(16),
     instrument VARCHAR(32),
     quantity INT,

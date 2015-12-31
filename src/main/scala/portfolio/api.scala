@@ -3,7 +3,7 @@ package portfolio
 import java.text.DecimalFormat
 
 import org.joda.time.format.DateTimeFormat
-import org.joda.time.{LocalDate, DateTime}
+import org.joda.time.LocalDate
 import org.scalatra._
 import org.json4s._
 import org.json4s.native.JsonMethods._
@@ -21,14 +21,15 @@ class PortfolioApi extends ScalatraServlet {
 
   }
 
-  get("/portfolio/investment") {
-    val p = Portfolio.getInvestment(new DateTime())
-    p
+  get("/portfolio/balance") {
+    val to = new LocalDate(params("to"))
+    val p = Portfolio.getBalanceSeries(to)
+    jsonResponse(p.map(v => ("date" -> formatDate(v.date))~("cash" -> formatMoney(v.cash))~("investment" -> formatMoney(v.investment))))
   }
 
   get("/portfolio/values") {
     val to = new LocalDate(params("to"))
-    val p = Portfolio.getPortfolioValueSeries(to.toDateTimeAtStartOfDay)
+    val p = Portfolio.getPortfolioValueSeries(to)
     jsonResponse(p.map(v => ("date" -> formatDate(v._1))~("value" -> formatMoney(v._2))))
   }
 

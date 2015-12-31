@@ -1,6 +1,6 @@
 package portfolio
 
-import org.joda.time.DateTime
+import org.joda.time.LocalDate
 
 /**
  * Created by kolonen on 6.12.2015.
@@ -13,7 +13,7 @@ class portfolioDeprecated {
 
   /* Returns portfolio contents at given date
    */
-  def getPortfolio(date: DateTime) = {
+  def getPortfolio(date: LocalDate) = {
 
     def trade(holdings: Map[String, Asset], t: Event) =
       if (!holdings.contains(t.instrument) ) holdings + ((t.instrument, Asset(t.instrument, t.quantity, None)))

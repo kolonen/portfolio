@@ -4,9 +4,9 @@ import javax.sql.DataSource
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import scalikejdbc._
-import org.joda.time.{LocalDate, DateTime}
+import org.joda.time.{LocalDate}
 
-case class Event(eventId: Int, extId: Int, source: String, tradeDate: DateTime, eventType: String,
+case class Event(eventId: Int, extId: Int, source: String, tradeDate: LocalDate, eventType: String,
                  instrument: String, quantity: Int, amount: Double, price: Option[Double], currency: String, curRate: Double, profit: Double)
 
 object Event {
@@ -14,7 +14,7 @@ object Event {
     rs.int("event_id"),
     rs.int("ext_id"),
     rs.string("source"),
-    new DateTime(rs.date("trade_date")),
+    new LocalDate(rs.date("trade_date")),
     rs.string("event_type"),
     rs.string("instrument"),
     rs.int("quantity"),
@@ -77,7 +77,7 @@ class Database {
     .apply()
   }
 
-  def getTrades(until: DateTime) = DB readOnly { implicit session =>
+  def getTrades(until: LocalDate) = DB readOnly { implicit session =>
     sql"""SELECT event_id, ext_id, source, trade_date, event_type, instrument, quantity, amount, price, currency, cur_rate, profit
           FROM event
           WHERE event_type IN ('OSTO', 'MYYNTI')
@@ -88,7 +88,7 @@ class Database {
       .apply()
   }
 
-  def getCashFlowEvents(until: DateTime) = DB readOnly { implicit session =>
+  def getCashFlowEvents(until: LocalDate) = DB readOnly { implicit session =>
     sql"""SELECT event_id, ext_id, source, trade_date, event_type, instrument, quantity, amount, price, currency, cur_rate, profit
           FROM event
           WHERE event_type IN ('OSTO', 'MYYNTI', 'OSINKO')

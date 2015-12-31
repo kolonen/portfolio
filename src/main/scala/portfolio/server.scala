@@ -18,6 +18,7 @@ object server {
     val server = new Server(8080)
     val context = new WebAppContext()
     context setContextPath "/"
+    context.setResourceBase("src/main/webapp")
     context.setInitParameter(ScalatraListener.LifeCycleKey, "portfolio.ScalatraBootstrap")
     context.addEventListener(new ScalatraListener)
     context.addServlet(classOf[DefaultServlet], "/")

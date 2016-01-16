@@ -17,25 +17,17 @@ class PortfolioApi extends ScalatraServlet {
   def formatMoney(d: Double) = df.format(d)
   def jsonResponse(r: JValue) = compact(render(r))
 
-  get("/portfolio/cash") {
-
-  }
-
-  get("/portfolio/balance") {
+  get("/portfolio/balanceSeries") {
     val to = new LocalDate(params("to"))
     val p = Portfolio.getBalanceSeries(to)
+    contentType = "application/json"
     jsonResponse(p.map(v => ("date" -> formatDate(v.date))~("cash" -> formatMoney(v.cash))~("investment" -> formatMoney(v.investment))))
   }
 
   get("/portfolio/values") {
     val to = new LocalDate(params("to"))
     val p = Portfolio.getPortfolioValueSeries(to)
+    contentType = "application/json"
     jsonResponse(p.map(v => ("date" -> formatDate(v._1))~("value" -> formatMoney(v._2))))
   }
-
-  get("/portfolio") {
-  }
 }
-
-case class PortfolioValue(date: LocalDate, value: Double)
-case class ValuesResponse(values: List[PortfolioValue])

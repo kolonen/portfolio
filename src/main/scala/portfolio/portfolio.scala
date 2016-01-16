@@ -85,7 +85,8 @@ object Portfolio {
       Balance(e.tradeDate, investment, Math.max(0, cashAfter))
     }
     val events = db.getCashFlowEvents(date)
-    events.scanLeft[Balance, List[Balance]](Balance(events.head.tradeDate.minusDays(1), 0.0, 0.0)) ((balance, event) => calculate(balance, event))
+    val balances = events.scanLeft[Balance, List[Balance]](Balance(events.head.tradeDate, 0.0, 0.0)) ((balance, event) => calculate(balance, event))
+    fillBalances(balances, Some(date))
   }
 
   /**
@@ -141,6 +142,18 @@ object Portfolio {
         (acc._1:+FxRate(x, currency, rate.get), rate.get)
       else
         (acc._1:+FxRate(x, currency, acc._2), acc._2)
+    })._1
+  }
+
+  def fillBalances(balances: List[Balance], to: Option[LocalDate] = None) = {
+    val balanceMap = balances.map(r => (r.date, r)).toMap
+    val days = generateDateRange(balances.head.date, to.getOrElse(balances.last.date))
+    days.foldLeft[(List[Balance], Balance)] ((List(), balances.head)) ((acc, x) => {
+      val balance = balanceMap.get(x)
+      if(balance.isDefined)
+        (acc._1:+balance.get.copy(date = x), balance.get)
+      else
+        (acc._1:+Balance(x, acc._2.investment, acc._2.cash), acc._2)
     })._1
   }
 

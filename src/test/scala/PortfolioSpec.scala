@@ -10,8 +10,8 @@ class PortfolioSpec extends FunSpec with Matchers{
 
   describe("Quote utilities") {
     it("gennerates correct date rage") {
-      val d1 = new DateTime("2014-01-01")
-      val d2 = new DateTime("2014-01-10")
+      val d1 = new LocalDate("2014-01-01")
+      val d2 = new LocalDate("2014-01-10")
       println(Portfolio.generateDateRange(d1,d2))
     }
 

@@ -46,6 +46,9 @@ object Portfolio {
 
   /**
    * Returns a sparse series of different portfolios (contents) from date one to given date.
+   *
+   * Portfolio for a date is the closing portfolio of that date, i.e. the portfolio after all the buys and sells on that day.
+   *
    */
   def getPortfolioSeries(date: LocalDate) = {
     def trade(p: Portfolio, t: Event) = {
@@ -61,7 +64,10 @@ object Portfolio {
     val trades = db.getTrades(date)
     val t = trades.head
     val dayOnePortfolio = Portfolio(Map(t.instrument -> Asset(t.instrument, t.quantity, None)), t.tradeDate)
-    trades.tail.scanLeft(dayOnePortfolio) ((acc, e) => trade(acc,e))
+    val portfolioSeries = trades.tail.scanLeft(dayOnePortfolio) ((acc, e) => trade(acc,e))
+    val portfoliosByDate = portfolioSeries.zipWithIndex.groupBy(p => p._1.date)
+    val portfoliosByDateList = portfolioSeries.map(k => portfoliosByDate.get(k.date).get)
+    portfoliosByDateList.map(c => c.maxBy(d => d._2)).map(_._1)
   }
 
   /**

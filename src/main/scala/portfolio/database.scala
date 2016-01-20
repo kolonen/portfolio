@@ -71,7 +71,7 @@ class Database {
   def getEvents =  DB readOnly { implicit session =>
     sql"""SELECT event_id, ext_id, source, trade_date, event_type, instrument, quantity, amount, price, currency, cur_rate, profit
           FROM event
-          ORDER BY trade_date"""
+          ORDER BY trade_date, event_type"""
     .map(rs => Event(rs))
     .list
     .apply()
@@ -82,7 +82,7 @@ class Database {
           FROM event
           WHERE event_type IN ('OSTO', 'MYYNTI')
           AND trade_date <= ${until}
-          ORDER BY trade_date"""
+          ORDER BY trade_date, event_type"""
       .map(rs => Event(rs))
       .list
       .apply()
@@ -93,7 +93,7 @@ class Database {
           FROM event
           WHERE event_type IN ('OSTO', 'MYYNTI', 'OSINKO')
           AND trade_date <= ${until}
-          ORDER BY trade_date"""
+          ORDER BY trade_date, event_type"""
       .map(rs => Event(rs)).list.apply
   }
   def saveQuotes(quotes: List[Quote]) = DB autoCommit  { implicit session =>

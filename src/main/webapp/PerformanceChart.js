@@ -17,15 +17,11 @@ module.exports = React.createClass({
   },
   drawChart: function() {
 
-    var dates = _.map(this.props.balances, function(d) { return d.date })
-    var cashSeries = _.map(this.props.balances, function(d) { return parseFloat(d.cash) })
-    var valueSeries = _.map(this.props.values, function(d) { return parseFloat(d.value) })
-    var investmentSeries = _.map(this.props.balances, function(d) { return parseFloat(d.investment) })
-    var stacked = this.stackCash(valueSeries, cashSeries)
+    var stacked = this.stackCash(this.props.cash, this.props.values)
     var data = [
-      {x: dates, y: cashSeries, type: 'scatter', fill: 'tozeroy', fillcolor: 'lightgreen' , line : { color: 'green'}},
-      {x: dates, y: stacked, type: 'scatter', fill: 'tonexty', fillcolor: 'lightorange' , line : { color: 'lightorange'}},
-      {x: dates, y: investmentSeries, type: 'scatter', line : { color: 'red'}}
+      {x: this.props.dateRange, y: this.props.cash, type: 'scatter', fill: 'tozeroy', fillcolor: 'blue' , line : { color: 'blue'}, name : 'Cash' },
+      {x: this.props.dateRange, y: stacked, type: 'scatter', fill: 'tonexty', fillcolor: 'lightblue'  , line : { color: 'lightblue'} , name : 'Total Value' },
+      {x: this.props.dateRange, y: this.props.investment, type: 'scatter', line : { color: 'grey'}, name : 'Investment' }
     ]
     var layout = {
         title: 'Portfolio',

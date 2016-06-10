@@ -6,12 +6,12 @@ import com.zaxxer.hikari.HikariDataSource
 import scalikejdbc._
 import org.joda.time.{LocalDate}
 
-case class Event(eventId: Int, extId: Int, source: String, tradeDate: LocalDate, eventType: String,
+case class Event(eventId: Option[Int] = None, extId: Int, source: String, tradeDate: LocalDate, eventType: String,
                  instrument: String, quantity: Int, amount: Double, price: Option[Double], currency: String, curRate: Double, profit: Double)
 
 object Event {
   def apply(rs: WrappedResultSet) = new Event(
-    rs.int("event_id"),
+    Some(rs.int("event_id")),
     rs.int("ext_id"),
     rs.string("source"),
     new LocalDate(rs.date("trade_date")),

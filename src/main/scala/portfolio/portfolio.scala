@@ -6,6 +6,7 @@ case class Asset(instrument: String, quantity: Int, assetType: Option[String])
 case class Portfolio(holdings: Map[String, Asset], date: LocalDate)
 case class Balance(date: LocalDate, investment: Double, cash: Double)
 
+class MissingQuotesException(message: String = null) extends java.lang.Exception(message)
 /**
  * Created by kolonen on 7.11.2015.
  */
@@ -15,6 +16,7 @@ object Portfolio {
   val BaseCurrency = "EUR"
 
   /**
+   * Calculates portfolio value series from day one to date. 
    *
    * @param date
    * @return
@@ -30,6 +32,7 @@ object Portfolio {
     val quotes =
       {
         for(i <- instruments) yield {
+          //TODO get quotes only for the time the instrument is in the portfolio
           val q = db.getQuotes(i, days.head, days.last)
           val fxRates =
             if(!q.head.currency.equals(BaseCurrency))
@@ -65,9 +68,12 @@ object Portfolio {
     val t = trades.head
     val dayOnePortfolio = Portfolio(Map(t.instrument -> Asset(t.instrument, t.quantity, None)), t.tradeDate)
     val portfolioSeries = trades.tail.scanLeft(dayOnePortfolio) ((acc, e) => trade(acc,e))
-    val portfoliosByDate = portfolioSeries.zipWithIndex.groupBy(p => p._1.date)
-    val portfoliosByDateList = portfolioSeries.map(k => portfoliosByDate.get(k.date).get)
-    portfoliosByDateList.map(c => c.maxBy(d => d._2)).map(_._1)
+    
+    val p = portfolioSeries.tail.foldLeft[(List[Portfolio], Portfolio)] ((List(), portfolioSeries.head)) ( (acc, p) => {
+      if (p.date.isAfter(acc._2.date)) (acc._1 :+ acc._2, p)
+      else (acc._1, p)
+    })
+    p._1 :+ p._2
   }
 
   /**
@@ -120,13 +126,21 @@ object Portfolio {
     val resultMap = scala.collection.mutable.Map[(LocalDate, String), Double]()
     val days = generateDateRange(quotes.head.date, to.getOrElse(quotes.last.date))
     var prevQuote = quotes.head.close
+    var missingStreak = 0
+    val maxStreak = 5
     days.foreach(d => {
       val q = m.get((d, instrument))
       if(q.isDefined) {
         prevQuote = q.get
         resultMap.put((d, instrument), q.get)
+        missingStreak = 0
       }
-      else resultMap.put((d, instrument), prevQuote)
+      else {
+        resultMap.put((d, instrument), prevQuote)
+        missingStreak +=1
+      }
+      if(missingStreak > maxStreak)
+        throw new MissingQuotesException(s"Too many missing quotes for $instrument between ${d.minusDays(maxStreak)} and $d")
     })
     resultMap.toMap
   }

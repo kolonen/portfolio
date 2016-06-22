@@ -5,18 +5,34 @@ import org.joda.time.{LocalDate, Days}
 case class Asset(instrument: String, quantity: Int, assetType: Option[String])
 case class Portfolio(holdings: Map[String, Asset], date: LocalDate)
 case class Balance(date: LocalDate, investment: Double, cash: Double)
+case class Position(instrument: String, opened: LocalDate, closed: Option[LocalDate])
 
 class MissingQuotesException(message: String = null) extends java.lang.Exception(message)
-/**
- * Created by kolonen on 7.11.2015.
- */
+
+
 object Portfolio {
 
   val db = new Database
   val BaseCurrency = "EUR"
 
+  def getPositions(instrument: String, sps: List[Portfolio]) = {
+
+    var closedPositions = List[Position]()
+    var openPositions = Map[String, Position]()
+
+    for (p <- sps) {
+      if(p.holdings.contains(instrument) && !openPositions.contains(instrument)) {
+        openPositions = openPositions + (instrument -> Position(instrument, p.date, None))
+      } else if( !p.holdings.contains(instrument) && openPositions.contains(instrument)) {
+        closedPositions = openPositions.get(instrument).get.copy(closed = Some(p.date)) :: closedPositions
+        openPositions = openPositions - instrument
+      }
+    }
+    closedPositions ++ openPositions.values.toList
+  }
+
   /**
-   * Calculates portfolio value series from day one to date. 
+   * Calculates portfolio value series from day one to date.
    *
    * @param date
    * @return
@@ -25,26 +41,25 @@ object Portfolio {
 
     def getPortfolioValue(p: Portfolio, quotes: Map[(LocalDate, String), Double]) =
       p.holdings.map(h => quotes((p.date, h._2.instrument)) * h._2.quantity).sum
-
-    val ps = toDenseSeries(getPortfolioSeries(date), date)
-    val days = generateDateRange(ps.head.date, ps.last.date)
-    val instruments = ps.flatMap(p => p.holdings.map(h => h._2.instrument)).distinct
+    val sparseSeries = getPortfolioSeries(date)
+    val denseSeries = toDenseSeries(getPortfolioSeries(date), date)
+    val days = generateDateRange(denseSeries.head.date, denseSeries.last.date)
+    val instruments = denseSeries.flatMap(p => p.holdings.map(h => h._2.instrument)).distinct
     val quotes =
       {
         for(i <- instruments) yield {
-          //TODO get quotes only for the time the instrument is in the portfolio
-          val q = db.getQuotes(i, days.head, days.last)
+          val positions = getPositions(i, sparseSeries)
+          val q = positions.map( p => db.getQuotes(p.instrument, p.opened, p.closed.getOrElse(days.last))).flatten
+
           val fxRates =
-            if(!q.head.currency.equals(BaseCurrency))
-              Some(fillFxRates(db.getFxRates(q.head.currency, q.head.date, q.last.date), Some(date)))
+            if(!q.head.currency.equals(BaseCurrency)) Some(fillFxRates(db.getFxRates(q.head.currency, q.head.date, q.last.date), Some(date)))
             else None
-          prepareQuotes(db.getQuotes(i, days.head, days.last), fxRates, Some(date))
+          prepareQuotes(q, fxRates, Some(date))
         }
       }.reduceLeft(_++_)
 
-    val pm = ps.map(p => (p.date, p)).toMap
+    val pm = denseSeries.map(p => (p.date, p)).toMap
     days.map(d => (d, getPortfolioValue(pm(d), quotes)))
-
   }
 
   /**

@@ -4,7 +4,7 @@ version := "1.0"
 
 scalaVersion := "2.11.7"
 
-mainClass := Some("portfolio.server")
+mainClass in (Compile,run) := Some("portfolio.server")
 
 libraryDependencies ++= Seq(
   "com.zaxxer" % "HikariCP" % "2.4.1",

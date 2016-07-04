@@ -39,29 +39,37 @@ object Portfolio {
    */
   def getPortfolioValueSeries(date: LocalDate) = {
 
-    def getPortfolioValue(p: Portfolio, quotes: Map[(LocalDate, String), Double]) =
-      p.holdings.map(h => quotes((p.date, h._2.instrument)) * h._2.quantity).sum
     val sparseSeries = getPortfolioSeries(date)
     val denseSeries = toDenseSeries(getPortfolioSeries(date), date)
     val days = generateDateRange(denseSeries.head.date, denseSeries.last.date)
     val instruments = denseSeries.flatMap(p => p.holdings.map(h => h._2.instrument)).distinct
-    val quotes =
-      {
-        for(i <- instruments) yield {
-          val positions = getPositions(i, sparseSeries)
-          val q = positions.map( p => db.getQuotes(p.instrument, p.opened, p.closed.getOrElse(days.last))).flatten
-
-          val fxRates =
-            if(!q.head.currency.equals(BaseCurrency)) Some(fillFxRates(db.getFxRates(q.head.currency, q.head.date, q.last.date), Some(date)))
-            else None
-          prepareQuotes(q, fxRates, Some(date))
-        }
-      }.reduceLeft(_++_)
+    val positions = instruments.map( i => getPositions(i, sparseSeries)).flatten
+    val quotes = positions.map( p => db.getQuotes(p.instrument, p.opened, p.closed.getOrElse(days.last))).flatten.map(q => ((q.date, q.instrument), q)).toMap
 
     val pm = denseSeries.map(p => (p.date, p)).toMap
     days.map(d => (d, getPortfolioValue(pm(d), quotes)))
   }
 
+  /**
+   *
+   * @param p
+   * @param quotes
+   * @param maxMissingQuotes
+   * @return
+   */
+  def getPortfolioValue(p: Portfolio, quotes: Map[(LocalDate, String), Quote], maxMissingQuotes: Int = 5) = {
+    def getQuote(quotes: Map[(LocalDate, String), Quote], date: LocalDate, instrument: String) = {
+      var q = quotes.get(date, instrument)
+      var c = 1
+      while(!q.isDefined && c <= maxMissingQuotes) {
+        q = quotes.get(date.minusDays(c), instrument)
+        c = c + 1
+      }
+      if(q.isEmpty) throw new MissingQuotesException()
+      q.get
+    }
+    p.holdings.map(h => getQuote(quotes, p.date, h._1).baseCurrencyClose * h._2.quantity).sum
+  }
   /**
    * Returns a sparse series of different portfolios (contents) from date one to given date.
    *
@@ -91,20 +99,6 @@ object Portfolio {
     p._1 :+ p._2
   }
 
-  /**
-   * Calculates total investment tied to portfolio on given date. Tied investment is buys - sells - dividends.
-   * Calculation is done event by event, even though intermediate values are not used at this point.
-   */
-  def getInvestment(date: LocalDate) = {
-    def calculate(b: Balance, e: Event) = {
-      val cashAfter = b.cash + e.amount
-      val investment = if ( cashAfter < 0.0) b.investment + Math.abs(cashAfter) else b.investment
-      Balance(e.tradeDate, investment, Math.max(0, cashAfter))
-    }
-    val events = db.getCashFlowEvents(date)
-    events.foldLeft[Balance](Balance(events.head.tradeDate.minusDays(1), 0.0, 0.0)) ((balance, event) => calculate(balance, event))
-  }
-
   def getBalanceSeries(date: LocalDate) = {
     def calculate(b: Balance, e: Event) = {
       val cashAfter = b.cash + e.amount
@@ -115,99 +109,4 @@ object Portfolio {
     val balances = events.scanLeft[Balance, List[Balance]](Balance(events.head.tradeDate, 0.0, 0.0)) ((balance, event) => calculate(balance, event))
     fillBalances(balances, Some(date))
   }
-
-  /**
-   * Returns current cash in the portfolio, representing the amount of
-   * money got from closed positions that is not spent to open positions afterwards.
-   */
-  def getCash(date: LocalDate) =
-    db.getCashFlowEvents(date).foldLeft[Double](0.0)((cash, event) => Math.max(0, cash + event.amount))
-
-  /**
-   * Adds missing quotes for dates between quotes.first.date and quotes.last.date. If a quote is missing, previous value is used.
-   *
-   * Converts values to base currency if not originally.
-   *
-   * @param quotes ordered list of quotes per day
-   * @param fxRates ordered list of fx rates per day. for the same time line as quotes.
-   * @return a map with date, instrument pair as key and days (closing) quote as value
-   */
-  def prepareQuotes(quotes: List[Quote], fxRates: Option[List[FxRate]], to: Option[LocalDate] = None) = {
-    val m =
-      if(fxRates.isDefined) quotes.zip(fxRates.get).map(i => ((i._1.date, i._1.instrument), i._1.close/i._2.average)).toMap
-      else quotes.map(q => ((q.date, q.instrument), q.close)).toMap
-
-    val instrument = quotes.head.instrument
-    val resultMap = scala.collection.mutable.Map[(LocalDate, String), Double]()
-    val days = generateDateRange(quotes.head.date, to.getOrElse(quotes.last.date))
-    var prevQuote = quotes.head.close
-    var missingStreak = 0
-    val maxStreak = 5
-    days.foreach(d => {
-      val q = m.get((d, instrument))
-      if(q.isDefined) {
-        prevQuote = q.get
-        resultMap.put((d, instrument), q.get)
-        missingStreak = 0
-      }
-      else {
-        resultMap.put((d, instrument), prevQuote)
-        missingStreak +=1
-      }
-      if(missingStreak > maxStreak)
-        throw new MissingQuotesException(s"Too many missing quotes for $instrument between ${d.minusDays(maxStreak)} and $d")
-    })
-    resultMap.toMap
-  }
-
-  /**
-   * Adds rates for days which are not present between first and last element in the list. Previous rate is
-   * used for missing days.
-   *
-   * @param rates a list of rates ordered by date
-   * @return an ordered list rates which contains rates for all days
-   */
-  def fillFxRates(rates: List[FxRate], to: Option[LocalDate] = None) = {
-    val currency = rates.head.currency
-    val rateMap = rates.map(r => (r.date, r.average)).toMap
-    val days = generateDateRange(rates.head.date, to.getOrElse(rates.last.date))
-    days.foldLeft[(List[FxRate], Double)] ((List(), rates.head.average)) ((acc, x) => {
-      val rate = rateMap.get(x)
-      if(rate.isDefined)
-        (acc._1:+FxRate(x, currency, rate.get), rate.get)
-      else
-        (acc._1:+FxRate(x, currency, acc._2), acc._2)
-    })._1
-  }
-
-  def fillBalances(balances: List[Balance], to: Option[LocalDate] = None) = {
-    val balanceMap = balances.map(r => (r.date, r)).toMap
-    val days = generateDateRange(balances.head.date, to.getOrElse(balances.last.date))
-    days.foldLeft[(List[Balance], Balance)] ((List(), balances.head)) ((acc, x) => {
-      val balance = balanceMap.get(x)
-      if(balance.isDefined)
-        (acc._1:+balance.get.copy(date = x), balance.get)
-      else
-        (acc._1:+Balance(x, acc._2.investment, acc._2.cash), acc._2)
-    })._1
-  }
-
-  def toDenseSeries(ps: List[Portfolio], to: LocalDate) = {
-    val from = ps.head.date
-    val days = generateDateRange(from, to)
-    var current = ps.head
-    var rest = ps.tail
-    days.map(d => {
-      if(rest.isEmpty || rest.head.date.isAfter(d)) current.copy(date = d)
-      else {
-        current = rest.head
-        rest = rest.tail
-        current.copy(date = d)
-      }
-    })
-  }
-
-  def generateDateRange(from: LocalDate, to: LocalDate) =
-    for(d <- List.range(0, Days.daysBetween(from, to).getDays+1)) yield (from.plusDays(d))
-
 }

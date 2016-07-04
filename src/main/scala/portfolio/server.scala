@@ -8,9 +8,7 @@ import org.scalatra.servlet.ScalatraListener
 import org.eclipse.jetty.server.Server
 
 import org.scalatra.LifeCycle
-/**
- * Created by kolonen on 22.12.2015.
- */
+
 object server {
 
   def main(args: Array[String]) {

@@ -112,11 +112,13 @@ class Database {
           AND q.instrument = ${instrument}
           ORDER BY q.date""".map(rs => Quote(rs)).list.apply
 
-    if (!quotes.head.currency.equals(Portfolio.BaseCurrency)) {
-      val fxRates = getFxRates(quotes.head.currency, from, to)
-      quotes
-        .zip(fxRates)
-        .map { case (q, f) => q.copy(fxRate = Some(f.average)) }
+    if (quotes.exists(q => !q.currency.equals(Portfolio.BaseCurrency))) {
+      val fxRates = getFxRates(quotes.head.currency, from, to).map(r => (r.date, r)).toMap
+      quotes.map( q => if(q.currency.equals(Portfolio.BaseCurrency)) q else {
+        val fxRate = fxRates.get(q.date)
+        if(fxRate.isDefined) q.copy(fxRate = Some(fxRate.get.average))
+        else throw new Exception("Missing fx rate")
+      })
     }
     else quotes
   }

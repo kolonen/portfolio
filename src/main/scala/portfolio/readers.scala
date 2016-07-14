@@ -35,7 +35,7 @@ object Readers {
     val df = new SimpleDateFormat("dd.MM.yyyy")
     val in = new FileReader(file)
     val records = CSVFormat.EXCEL.withHeader().parse(in).toList
-    records.map(r => FxRate(new LocalDate(df.parse(r.get("Date"))), currency, r.get("Average").toDouble))
+    records.map(r => FxRate(date = new LocalDate(df.parse(r.get("Date"))), currency = currency, rate = r.get("Average").toDouble))
   }
 
   def readQuotes(file: String, instrument: String) = {

@@ -23,11 +23,18 @@ CREATE TABLE quote(
     low DECIMAL(10,5),
     close DECIMAL(10,5) NOT NULL,
     volume INT,
-    currency CHAR(3) NOT NULL
+    currency CHAR(3) NOT NULL,
+    source VARCHAR(16),
+    created DATETIME,
+    PRIMARY KEY (date, instrument)
 ) ENGINE=InnoDB;
 
-CREATE TABLE currency_rate(
-    currency CHAR(3),
-    date DATE,
-    average DECIMAL(10,5)
+CREATE TABLE fx_rate(
+    currency CHAR(3) NOT NULL,
+    date DATE NOT NULL,
+    rate DECIMAL(10,5) NOT NULL,
+    rate_type VARCHAR(16),
+    source VARCHAR(16),
+    created DATETIME,
+    PRIMARY KEY (date, currency)
 ) ENGINE=InnoDB;

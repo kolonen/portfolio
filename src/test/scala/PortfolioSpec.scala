@@ -1,3 +1,4 @@
+
 import org.joda.time.{LocalDate, DateTime}
 import org.scalatest.{Matchers, FunSpec}
 import portfolio.{Quote, FxRate, Portfolio}
@@ -7,7 +8,7 @@ import portfolio.{Quote, FxRate, Portfolio}
  */
 class PortfolioSpec extends FunSpec with Matchers{
 
-
+/*
   describe("Quote utilities") {
     it("gennerates correct date rage") {
       val d1 = new LocalDate("2014-01-01")
@@ -34,4 +35,5 @@ class PortfolioSpec extends FunSpec with Matchers{
       Portfolio.fillFxRates(rates) should contain theSameElementsInOrderAs(expexted)
     }
   }
+*/
 }

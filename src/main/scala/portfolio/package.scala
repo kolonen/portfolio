@@ -1,9 +1,13 @@
 import org.joda.time.{Days, LocalDate}
+import org.json4s.DefaultFormats
+import org.json4s.ext.JodaTimeSerializers
 
 /**
  * Created by kolonen on 3.7.2016.
  */
 package object portfolio {
+
+  implicit val formats =  DefaultFormats ++ JodaTimeSerializers.all
 
   def fillBalances(balances: List[Balance], to: Option[LocalDate] = None) = {
     val balanceMap = balances.map(r => (r.date, r)).toMap

@@ -19,6 +19,8 @@ class PortfolioApi extends ScalatraServlet {
   def formatMoney(d: Double) = df.format(d)
   def jsonResponse(r: JValue) = compact(render(r))
 
+
+
   get("/portfolio/balanceSeries") {
     val to = new LocalDate(params("to"))
     val p = Portfolio.getBalanceSeries(to)
@@ -40,5 +42,25 @@ class PortfolioApi extends ScalatraServlet {
     contentType = "application/json"
     val figures = values.zip(balances).map(f => Figure(f._1._1, f._1._2, f._2.cash, f._2.investment))
     jsonResponse(figures.map(v => ("date" -> formatDate(v.date))~("value" -> formatMoney(v.value))~("cash" -> formatMoney(v.cash))~("investment" -> formatMoney(v.investment))))
+  }
+  put("/quotes") {
+      val json = parse(request.body).extract[List[JValue]]
+      val quotes = json.map(j => new Quote(
+        instrument = (j \ "instrument").extract[String],
+        currency = (j \ "currency").extract[String],
+        date = dtf.parseLocalDate((j \ "date").extract[String]),
+        close = (j \ "close").extract[Double],
+        source = Option((j \ "source").extract[String])))
+      Portfolio.db.saveQuotes(quotes)
+  }
+  put("/fxrates") {
+    val json = parse(request.body).extract[List[JValue]]
+    val rates = json.map(j => new FxRate(
+      currency = (j \ "currency").extract[String],
+      date = dtf.parseLocalDate((j \ "date").extract[String]),
+      rate = (j \ "rate").extract[Double],
+      rateType = Option((j \ "rateType").extract[String]),
+      source = Option((j \ "source").extract[String])))
+    Portfolio.db.saveFxRates(rates)
   }
 }

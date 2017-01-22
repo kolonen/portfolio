@@ -46,7 +46,7 @@ object test {
 
   def main5(args: Array[String]): Unit = {
     val  db = new Database
-    val quotes = QuoteReader.readQuotes("data/sanoma.csv", "SAA1V")
+    val quotes = Readers.readQuotes("data/sanoma.csv", "SAA1V")
     quotes.foreach(q => println(q))
     db.saveQuotes(quotes)
   }

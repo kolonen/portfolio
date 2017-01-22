@@ -1,3 +1,4 @@
+
 import org.joda.time.{LocalDate, DateTime}
 import org.scalatest.{Matchers, FunSpec}
 import portfolio.{Quote, FxRate, Portfolio}
@@ -7,33 +8,12 @@ import portfolio.{Quote, FxRate, Portfolio}
  */
 class PortfolioSpec extends FunSpec with Matchers{
 
-
+/*
   describe("Quote utilities") {
     it("gennerates correct date rage") {
       val d1 = new LocalDate("2014-01-01")
       val d2 = new LocalDate("2014-01-10")
       println(Portfolio.generateDateRange(d1,d2))
-    }
-
-    it("correctly prepares quotes in base currency") {
-      val quotes = List(
-        Quote("TROUT1V", new LocalDate("2014-01-01"), close = 0.45,  currency = "EUR"),
-        Quote("TROUT1V", new LocalDate("2014-01-03"), close = 0.46,  currency = "EUR"),
-        Quote("TROUT1V", new LocalDate("2014-01-04"), close = 0.47,  currency = "EUR"),
-        Quote("TROUT1V", new LocalDate("2014-01-07"), close = 0.48,  currency = "EUR"),
-        Quote("TROUT1V", new LocalDate("2014-01-08"), close = 0.37,  currency = "EUR")
-      )
-      val expected = Map(
-        ((new LocalDate("2014-01-01"),"TROUT1V"),0.45),
-        ((new LocalDate("2014-01-02"),"TROUT1V"),0.45),
-        ((new LocalDate("2014-01-03"),"TROUT1V"),0.46),
-        ((new LocalDate("2014-01-04"),"TROUT1V"),0.47),
-        ((new LocalDate("2014-01-05"),"TROUT1V"),0.47),
-        ((new LocalDate("2014-01-06"),"TROUT1V"),0.47),
-        ((new LocalDate("2014-01-07"),"TROUT1V"),0.48),
-        ((new LocalDate("2014-01-08"),"TROUT1V"),0.37)
-      )
-      Portfolio.prepareQuotes(quotes, None) should contain theSameElementsAs(expected)
     }
 
     it("fills in missing fx rates correctly ") {
@@ -55,4 +35,5 @@ class PortfolioSpec extends FunSpec with Matchers{
       Portfolio.fillFxRates(rates) should contain theSameElementsInOrderAs(expexted)
     }
   }
+*/
 }

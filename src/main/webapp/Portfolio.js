@@ -14,22 +14,13 @@ module.exports = React.createClass({
         }
     },
     componentDidMount : function() {
-      $.get("http://localhost:8080/portfolio/values?to=2014-03-01", function(r) {
-            this.setState({
-              dateRange: _.map(r, function(v) { return v.date }),
-              values: _.map(r, function(v) { return parseFloat(v.value) })
-            })
-                    console.log(this.state.dateRange)
-                    console.log(this.state.values)
-      }.bind(this))
-
-      $.get("http://localhost:8080/portfolio/balanceSeries?to=2014-03-01", function(r) {
+      $.get("http://localhost:8080/portfolio?to=2013-04-01", function(r) {
         this.setState({
-            cash: _.map(r, function(b) { return parseFloat(b.cash) }),
-            investment: _.map(r, function(b) { return parseFloat(b.investment) }),
+          dateRange: _.map(r, function(v) { return v.date }),
+          values: _.map(r, function(v) { return parseFloat(v.value) }),
+          cash: _.map(r, function(v) { return parseFloat(v.cash) }),
+          investment: _.map(r, function(v) { return parseFloat(v.investment) })
           })
-        console.log(this.state.investment)
-        console.log(this.state.cash)
       }.bind(this))
     },
     render : function() {
